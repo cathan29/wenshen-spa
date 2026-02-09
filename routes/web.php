@@ -21,6 +21,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::resource('services', ServiceController::class);
+    Route::get('/queue/{id}/print', [QueueController::class, 'printTicket'])->name('queue.print');
+    Route::patch('/queue/{id}/status', [QueueController::class, 'updateStatus'])->name('queue.updateStatus');
+    Route::post('/queue/{id}/add-service', [QueueController::class, 'addService'])->name('queue.addService');
 });
 
 // 👇 THIS IS THE FIX: The Public Route for Clients 👇
