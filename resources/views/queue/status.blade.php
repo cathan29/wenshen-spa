@@ -1,116 +1,152 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>My Queue Status - Wenshen Spa</title>
-    
-    {{-- 👇 LIVE UPDATE: Auto-refreshes every 10 seconds --}}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wenshen Spa Pass</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <meta http-equiv="refresh" content="10">
     
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap');
-        .luxury-font { font-family: 'Playfair Display', serif; }
-
-        @keyframes pulse-gold {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.4); }
-            70% { box-shadow: 0 0 0 15px rgba(212, 175, 55, 0); }
-        }
-        .animate-pulse-gold {
-            animation: pulse-gold 2s infinite;
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-sans { font-family: 'Lato', sans-serif; }
+        
+        .text-gold {
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center p-6" style="background-color: #F9F3E3;">
+<body class="bg-stone-900 h-screen w-full overflow-hidden flex flex-col items-center justify-center relative">
 
-    <div class="bg-white shadow-2xl rounded-sm p-8 w-full max-w-sm text-center border-t-8 relative overflow-hidden" style="border-color: #D4AF37;">
+    {{-- Ambient Glow --}}
+    <div class="absolute top-[-20%] left-[-20%] w-[150vw] h-[150vw] bg-amber-900/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+    {{-- MAIN CARD --}}
+    <div class="w-[85%] max-w-sm bg-stone-800/80 backdrop-blur-xl border border-stone-600/50 rounded-3xl shadow-2xl p-8 flex flex-col items-center justify-between relative z-10 aspect-[3/5]">
         
-        {{-- Background Watermark --}}
-        <div class="absolute -right-10 -top-10 text-9xl opacity-5 pointer-events-none select-none" style="color: #D4AF37;">⚜️</div>
-
-        {{-- Header --}}
-        <h1 class="font-bold tracking-[0.2em] uppercase text-xs mb-8" style="color: #6B4E31;">Wenshen Beauty Spa</h1>
-        
-        {{-- Queue Number --}}
-        <div class="mb-8 relative z-10">
-            <span class="block text-7xl font-black tracking-tighter luxury-font" style="color: #2C2015;">
-                {{ $queue->queue_number }}
-            </span>
-            <span class="text-xs uppercase tracking-widest font-semibold mt-2 block" style="color: #D4AF37;">Ticket Number</span>
-        </div>
-
-        {{-- Dynamic Status Box --}}
-        @if($queue->status === 'waiting')
+        {{-- Top: Logo & Status --}}
+        <div class="text-center w-full">
+            <h1 class="text-white text-[10px] uppercase tracking-[0.4em] mb-6 opacity-60 font-sans">Wenshen Beauty Spa</h1>
             
-            {{-- CASE 1: THEY ARE NEXT (0 People Ahead) --}}
-            @if(isset($peopleAhead) && $peopleAhead === 0)
-                <div class="p-6 rounded border mb-8 animate-pulse" style="background-color: #FFF3CD; border-color: #FFC107; color: #856404;">
-                    <div class="flex justify-center mb-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                    </div>
-                    <p class="font-bold text-lg mb-1 uppercase tracking-wide">Heads Up!</p>
-                    <p class="text-sm font-bold">You are the NEXT person in line.</p>
-                    <p class="text-xs mt-2">Please return to the waiting area immediately.</p>
+            @if($queue->status === 'serving')
+                <div class="inline-block px-4 py-2 rounded-full border border-green-500/30 bg-green-500/10 backdrop-blur-md">
+                    <span class="text-green-400 text-xs font-bold uppercase tracking-widest animate-pulse">Now Serving</span>
                 </div>
-
-            {{-- CASE 2: STILL WAITING (1+ People Ahead) --}}
+            @elseif($queue->status === 'cancel_requested')
+                <div class="inline-block px-4 py-2 rounded-full border border-red-500/30 bg-red-500/10 backdrop-blur-md">
+                    <span class="text-red-400 text-xs font-bold uppercase tracking-widest">Cancelling...</span>
+                </div>
             @else
-                <div class="p-6 rounded border mb-8" style="background-color: #FDFBF7; border-color: #E5E5E5; color: #6B4E31;">
-                    <p class="font-bold text-xl mb-1">You are in Line</p>
-                    <p class="text-sm opacity-80 mb-4">Please relax and wait for your turn.</p>
-                    
-                    {{-- People Ahead Counter --}}
-                    @if(isset($peopleAhead))
-                        <div class="inline-flex items-center px-4 py-2 rounded-full border text-xs font-bold uppercase tracking-wider" style="background-color: #F9F3E3; border-color: #D4AF37; color: #6B4E31;">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                            <span class="text-lg mr-1 font-black">{{ $peopleAhead }}</span> people ahead
-                        </div>
-                    @endif
+                <div class="inline-block px-4 py-2 rounded-full border border-amber-500/30 bg-amber-500/10 backdrop-blur-md">
+                    <span class="text-amber-400 text-xs font-bold uppercase tracking-widest">Waiting</span>
                 </div>
             @endif
-
-        @elseif($queue->status === 'serving')
-            <div class="p-6 rounded border mb-8 animate-pulse-gold" style="background-color: #2C2015; border-color: #D4AF37; color: #D4AF37;">
-                <p class="font-bold text-2xl uppercase tracking-wider mb-2">Now Serving</p>
-                <p class="text-xs text-white opacity-90">It is your turn! Please proceed.</p>
-            </div>
-
-        @elseif($queue->status === 'completed')
-            <div class="p-6 rounded border mb-8" style="background-color: #E8F5E9; border-color: #C8E6C9; color: #2E7D32;">
-                <p class="font-bold text-xl">Completed</p>
-                <p class="text-xs opacity-80">Thank you for visiting.</p>
-            </div>
-
-        @elseif($queue->status === 'cancelled')
-             <div class="p-6 rounded border mb-8 bg-red-50 text-red-800 border-red-200">
-                <p class="font-bold text-xl">Cancelled</p>
-                <p class="text-xs opacity-80">Please see the receptionist.</p>
-            </div>
-        @endif
-
-        {{-- Service Details --}}
-        <div class="border-t pt-6 text-left relative z-10" style="border-color: #F3E5AB;">
-            <div class="flex justify-between items-center mb-3">
-                <span class="text-xs uppercase tracking-wide opacity-60" style="color: #6B4E31;">Service</span>
-                <span class="font-bold text-sm" style="color: #2C2015;">{{ $queue->service->service_name }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-xs uppercase tracking-wide opacity-60" style="color: #6B4E31;">Time</span>
-                <span class="font-bold text-sm" style="color: #2C2015;">{{ $queue->created_at->format('h:i A') }}</span>
-            </div>
         </div>
 
-        {{-- Auto-Refresh Note (No Emoji) --}}
-        <div class="mt-8 flex items-center justify-center text-[10px] uppercase tracking-widest" style="color: #D4AF37;">
-            <span class="w-2 h-2 rounded-full mr-2 animate-ping" style="background-color: #D4AF37;"></span>
-            Live Updates Active
+        {{-- Center: The Number --}}
+        <div class="text-center">
+            <span class="block text-gold text-7xl font-black font-serif tracking-tighter drop-shadow-lg mb-2">
+                {{ $queue->queue_number }}
+            </span>
+            <p class="text-stone-300 text-sm font-sans font-light uppercase tracking-wide border-t border-stone-600/50 pt-4 mt-2">
+                {{ $queue->service->service_name }}
+            </p>
         </div>
+
+        {{-- Bottom: Position & Actions --}}
+        <div class="w-full text-center">
+            @if($queue->status === 'waiting')
+                <div class="mb-8">
+                    {{-- 🛡️ IMPROVED LOGIC: SHOWS "YOU ARE NEXT" INSTEAD OF "0 PEOPLE" --}}
+                    @if($peopleAhead === 0)
+                        <div class="flex flex-col items-center">
+                            <span class="text-[#D4AF37] text-3xl font-serif mb-1">You are Next!</span>
+                            <p class="text-stone-500 text-[10px] uppercase tracking-widest">Prepare to be called</p>
+                        </div>
+                    @else
+                        <p class="text-stone-500 text-[10px] uppercase tracking-widest mb-1">People Ahead</p>
+                        <p class="text-2xl text-white font-serif">{{ $peopleAhead }}</p>
+                    @endif
+                </div>
+                
+                {{-- Cancel Button --}}
+                <div x-data="{ showModal: false }">
+                    <button @click="showModal = true" class="text-stone-500 hover:text-red-400 text-[10px] uppercase tracking-[0.2em] transition-colors pb-2 border-b border-transparent hover:border-red-400/50 cursor-pointer">
+                        Cancel Ticket
+                    </button>
+
+                    <div x-show="showModal" 
+                         style="display: none;" 
+                         class="fixed inset-0 z-[999] overflow-y-auto" 
+                         aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                        
+                        <div x-show="showModal" 
+                             x-transition:enter="ease-out duration-300"
+                             x-transition:enter-start="opacity-0" 
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="ease-in duration-200"
+                             x-transition:leave-start="opacity-100" 
+                             x-transition:leave-end="opacity-0"
+                             class="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+                             @click="showModal = false"></div>
+
+                        <div class="fixed inset-0 z-10 overflow-y-auto">
+                            <div class="flex min-h-full items-center justify-center p-4 text-center">
+                                <div x-show="showModal" 
+                                     x-transition:enter="ease-out duration-300"
+                                     x-transition:enter-start="opacity-0 scale-95" 
+                                     x-transition:enter-end="opacity-100 scale-100"
+                                     x-transition:leave="ease-in duration-200"
+                                     x-transition:leave-start="opacity-100 scale-100" 
+                                     x-transition:leave-end="opacity-0 scale-95"
+                                     @click.away="showModal = false"
+                                     class="relative transform overflow-hidden rounded-2xl bg-stone-900 border border-amber-900/50 text-left shadow-2xl transition-all w-full max-w-xs p-6 ring-1 ring-white/10 mx-auto">
+                                    
+                                    <div class="text-center mb-6">
+                                        <h3 class="text-white font-serif text-lg mb-2">Leave the Queue?</h3>
+                                        <p class="text-stone-400 text-xs">
+                                            You will lose your spot for <span class="text-amber-500 font-bold">{{ $queue->queue_number }}</span>.
+                                        </p>
+                                    </div>
+                                    
+                                    <form action="{{ route('queue.requestCancel', $queue->id) }}" method="POST">
+                                        @csrf @method('PATCH')
+                                        <div class="mb-4">
+                                            <input type="text" name="remarks" 
+                                                   placeholder="Reason (Optional)" 
+                                                   class="w-full bg-stone-800 border border-stone-700 rounded-lg text-white text-sm px-4 py-3 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition placeholder-stone-600 text-center">
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <button type="button" @click="showModal = false" class="py-3 rounded-lg bg-stone-800 text-stone-300 text-xs uppercase font-bold tracking-wider hover:bg-stone-700 transition">
+                                                Back
+                                            </button>
+                                            <button type="submit" class="py-3 rounded-lg bg-red-900/80 text-red-200 text-xs uppercase font-bold tracking-wider hover:bg-red-800 transition shadow-lg border border-red-800/50">
+                                                Confirm
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @elseif($queue->status === 'serving')
+                <div class="flex flex-col items-center">
+                    <p class="text-[#D4AF37] text-2xl font-serif mb-2 animate-bounce">It's Your Turn!</p>
+                    <p class="text-stone-400 text-[10px] uppercase tracking-widest animate-pulse">Please proceed to the counter</p>
+                </div>
+            @endif
+        </div>
+
     </div>
+
+    {{-- Decorative Bottom Text --}}
+    <p class="absolute bottom-6 text-stone-700 text-[8px] uppercase tracking-[0.3em]">Excellence in every detail</p>
 
 </body>
 </html>

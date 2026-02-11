@@ -16,7 +16,8 @@ class Queue extends Model
         'customer_name',
         'qr_token',
         'status',
-        'estimated_serving_time'
+        'estimated_serving_time',
+        'remarks'
     ];
 
     // This allows us to easily get the service details (like price/name) for this queue
