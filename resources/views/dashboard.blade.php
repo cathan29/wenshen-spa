@@ -18,16 +18,17 @@
                 action: null
             },
             ask(title, message, btnText, type, triggerEl) {
-                // 👇 ADDED THIS RESET: Allows calling multiple people without the modal freezing
+                // 1. Reset (Fixes the 'Frozen Button' bug)
                 this.confirm.open = false; 
                 this.confirm.action = null;
 
+                // 2. Set Data
                 this.confirm.title = title;
                 this.confirm.message = message;
                 this.confirm.btnText = btnText;
                 this.confirm.type = type;
 
-                // 👇 ADDED THIS DELAY: Ensures Alpine.js registers the new form correctly
+                // 3. Delay to allow UI refresh
                 setTimeout(() => {
                     this.confirm.action = () => triggerEl.closest('form').submit();
                     this.confirm.open = true;
@@ -150,7 +151,16 @@
                             <ul class="space-y-4">
                                 @foreach($todaysQueue as $queue)
                                     @continue($queue->status == 'cancel_requested')
-                                    <li class="p-5 rounded-lg border hover:shadow-md transition duration-150 relative group {{ $queue->status === 'serving' ? 'z-20 border-[#D4AF37] ring-1 ring-[#D4AF37] bg-white' : 'border-[#F3E5AB] bg-[#FFFCF5]' }}">
+                                    
+                                    {{-- 
+                                        👇 FIXED HERE: 
+                                        1. Moved x-data="{ dropdownOpen: false }" to the <li>
+                                        2. Added :class="dropdownOpen ? '!z-50' : ''" to force this card to the top
+                                    --}}
+                                    <li x-data="{ dropdownOpen: false }" 
+                                        :class="dropdownOpen ? '!z-50' : ''"
+                                        class="p-5 rounded-lg border hover:shadow-md transition duration-150 relative group {{ $queue->status === 'serving' ? 'z-20 border-[#D4AF37] ring-1 ring-[#D4AF37] bg-white' : 'border-[#F3E5AB] bg-[#FFFCF5]' }}">
+                                        
                                         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
                                             <div class="flex items-center space-x-5 w-full sm:w-auto">
                                                 <div class="bg-white p-2 border border-[#F3E5AB] rounded shadow-sm">
@@ -203,9 +213,15 @@
                                                         </button>
                                                     </form>
 
-                                                    <div x-data="{ open: false }" class="relative z-50">
-                                                        <button @click="open = !open" class="text-white text-xs font-bold py-2 px-3 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #4A5568;" title="Add another service"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add</button>
-                                                        <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 bg-white rounded-lg shadow-2xl z-[100] border border-gray-200 p-5 ring-1 ring-black ring-opacity-5" style="width: 300px; display: none;">
+                                                    {{-- 👇 FIXED DROPDOWN TOGGLE --}}
+                                                    <div class="relative z-50">
+                                                        <button @click="dropdownOpen = !dropdownOpen" class="text-white text-xs font-bold py-2 px-3 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #4A5568;" title="Add another service"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add</button>
+                                                        
+                                                        <div x-show="dropdownOpen" 
+                                                             @click.away="dropdownOpen = false" 
+                                                             class="absolute right-0 mt-2 bg-white rounded-lg shadow-2xl z-[100] border border-gray-200 p-5 ring-1 ring-black ring-opacity-5" 
+                                                             style="width: 300px; display: none;">
+                                                            
                                                             <form action="{{ route('queue.addService', $queue->id) }}" method="POST">
                                                                 @csrf
                                                                 <div class="flex items-center mb-3"><label class="block text-xs uppercase font-bold text-gray-600 tracking-wide whitespace-nowrap">Next Service</label></div>

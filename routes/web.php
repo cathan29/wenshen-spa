@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\QueueController;
+use App\Http\Controllers\AdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,10 +34,12 @@ Route::get('/monitor', [QueueController::class, 'monitor'])->name('queue.monitor
 
 /*
 |--------------------------------------------------------------------------
-| 🔒 PROTECTED ROUTES (Receptionist/Admin Only)
+| 🔒 PROTECTED ROUTES (Logged-in Users)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
+    
+    // --- 👩‍💼 RECEPTIONIST / SHARED ROUTES ---
     
     // Dashboard Console
     Route::get('/dashboard', [QueueController::class, 'index'])->name('dashboard');
@@ -47,13 +50,29 @@ Route::middleware('auth')->group(function () {
     Route::patch('/queue/{id}/status', [QueueController::class, 'updateStatus'])->name('queue.updateStatus');
     Route::post('/queue/{id}/add-service', [QueueController::class, 'addService'])->name('queue.addService');
 
-    // Service Management
-    Route::resource('services', ServiceController::class);
-
     // Profile Settings
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| 🛑 ADMIN ROUTES (Admin Role Only)
+|--------------------------------------------------------------------------
+| Only users with role='admin' can access these.
+*/
+Route::middleware(['auth', 'admin'])->group(function () {
+    
+    // Owner's Office (Dashboard Overview)
+    Route::get('/admin', [AdminController::class, 'index'])->name('admin.dashboard');
+
+    // 👇 NEW ANALYTICS & REPORTS PAGE (The Charts)
+    Route::get('/admin/reports', [AdminController::class, 'reports'])->name('admin.reports');
+    
+    // Service Management (Create/Edit/Delete)
+    Route::resource('services', ServiceController::class);
 });
 
 require __DIR__.'/auth.php';
