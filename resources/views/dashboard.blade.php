@@ -9,6 +9,7 @@
     {{-- 🟢 MAIN WRAPPER --}}
     <div x-data="{ 
             showHistory: false,
+            activeDropdown: null, 
             confirm: {
                 open: false,
                 title: '',
@@ -18,25 +19,34 @@
                 action: null
             },
             ask(title, message, btnText, type, triggerEl) {
-                // 1. Reset (Fixes the 'Frozen Button' bug)
+                // 1. Reset Modal State
                 this.confirm.open = false; 
                 this.confirm.action = null;
 
-                // 2. Set Data
+                // 2. Set Content
                 this.confirm.title = title;
                 this.confirm.message = message;
                 this.confirm.btnText = btnText;
                 this.confirm.type = type;
 
-                // 3. Delay to allow UI refresh
-                setTimeout(() => {
-                    this.confirm.action = () => triggerEl.closest('form').submit();
+                // 3. Bind Action (Submit the specific form connected to the clicked button)
+                // We use a closure to capture the form element immediately
+                let form = triggerEl.closest('form');
+                if (form) {
+                    this.confirm.action = () => form.submit();
+                } else {
+                    console.warn('No form found for confirmation');
+                    return;
+                }
+
+                // 4. Open Modal using nextTick for reliable re-render
+                this.$nextTick(() => {
                     this.confirm.open = true;
-                }, 50);
+                });
             }
          }" 
          class="min-h-screen font-sans relative"
-         style="background-color: #F9F3E3;"> {{-- 🎨 CUSTOM CREAM BG --}}
+         style="background-color: #F9F3E3;">
         
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -58,7 +68,6 @@
                     <div class="bg-white shadow-xl sm:rounded-2xl p-8 border-t-8 h-fit relative overflow-hidden" 
                          style="border-color: #6B4E31;">
                         
-                        {{-- Watermark Effect --}}
                         <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-[#F9F3E3] rounded-full opacity-50 blur-xl"></div>
 
                         <h3 class="text-xl font-bold mb-8 flex items-center border-b pb-4 relative z-10" style="color: #6B4E31; border-color: #F9F3E3;">
@@ -152,16 +161,12 @@
                                 @foreach($todaysQueue as $queue)
                                     @continue($queue->status == 'cancel_requested')
                                     
-                                    {{-- 
-                                        👇 FIXED HERE: 
-                                        1. Moved x-data="{ dropdownOpen: false }" to the <li>
-                                        2. Added :class="dropdownOpen ? '!z-50' : ''" to force this card to the top
-                                    --}}
-                                    <li x-data="{ dropdownOpen: false }" 
-                                        :class="dropdownOpen ? '!z-50' : ''"
+                                    <li :class="activeDropdown === {{ $queue->id }} ? '!z-50' : ''"
                                         class="p-5 rounded-lg border hover:shadow-md transition duration-150 relative group {{ $queue->status === 'serving' ? 'z-20 border-[#D4AF37] ring-1 ring-[#D4AF37] bg-white' : 'border-[#F3E5AB] bg-[#FFFCF5]' }}">
                                         
                                         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                            
+                                            {{-- Info --}}
                                             <div class="flex items-center space-x-5 w-full sm:w-auto">
                                                 <div class="bg-white p-2 border border-[#F3E5AB] rounded shadow-sm">
                                                     {!! QrCode::size(45)->generate(route('queue.show', $queue->qr_token)) !!}
@@ -179,6 +184,8 @@
                                                     <span class="text-xs text-gray-500 block uppercase tracking-wide">{{ $queue->service->service_name }}</span>
                                                 </div>
                                             </div>
+
+                                            {{-- Buttons --}}
                                             <div class="flex items-center space-x-2">
                                                 @if($queue->status === 'waiting')
                                                     {{-- CALL BUTTON --}}
@@ -186,18 +193,21 @@
                                                         @csrf @method('PATCH')
                                                         <input type="hidden" name="status" value="serving">
                                                         <button type="button" 
-                                                                @click="ask('Start Serving?', 'Are you sure you want to call {{ $queue->customer_name }}?', 'Call Client', 'primary', $el)"
+                                                                @click="ask('Start Serving?', @js('Are you sure you want to call ' . $queue->customer_name . '?'), 'Call Client', 'primary', $el)"
                                                                 class="text-white text-xs font-bold py-2 px-4 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #6B4E31;">
                                                             Call
                                                         </button>
                                                     </form>
 
+                                                    {{-- NO SHOW BUTTON --}}
                                                     <form action="{{ route('queue.updateStatus', $queue->id) }}" method="POST">
                                                         @csrf @method('PATCH')
                                                         <input type="hidden" name="status" value="no_show">
                                                         <button type="button" 
-                                                                @click="ask('Mark No Show?', 'Remove {{ $queue->customer_name }}?', 'Confirm', 'danger', $el)"
-                                                                class="text-gray-400 hover:text-gray-600 p-2" title="Mark as No Show"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg></button>
+                                                                @click="ask('Mark No Show?', @js('Remove ' . $queue->customer_name . '?'), 'Confirm', 'danger', $el)"
+                                                                class="text-gray-400 hover:text-gray-600 p-2" title="Mark as No Show">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                                        </button>
                                                     </form>
                                                 @endif
 
@@ -207,18 +217,21 @@
                                                         @csrf @method('PATCH')
                                                         <input type="hidden" name="status" value="completed">
                                                         <button type="button" 
-                                                                @click="ask('Complete Service?', 'Mark {{ $queue->customer_name }} as Done?', 'Complete', 'warning', $el)"
+                                                                @click="ask('Complete Service?', @js('Mark ' . $queue->customer_name . ' as Done?'), 'Complete', 'warning', $el)"
                                                                 class="text-white text-xs font-bold py-2 px-4 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #D4AF37;">
                                                             Done
                                                         </button>
                                                     </form>
 
-                                                    {{-- 👇 FIXED DROPDOWN TOGGLE --}}
+                                                    {{-- DROPDOWN TOGGLE --}}
                                                     <div class="relative z-50">
-                                                        <button @click="dropdownOpen = !dropdownOpen" class="text-white text-xs font-bold py-2 px-3 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #4A5568;" title="Add another service"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add</button>
+                                                        <button @click="activeDropdown = (activeDropdown === {{ $queue->id }} ? null : {{ $queue->id }})" 
+                                                                class="text-white text-xs font-bold py-2 px-3 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #4A5568;" title="Add another service">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add
+                                                        </button>
                                                         
-                                                        <div x-show="dropdownOpen" 
-                                                             @click.away="dropdownOpen = false" 
+                                                        <div x-show="activeDropdown === {{ $queue->id }}" 
+                                                             @click.away="activeDropdown = null" 
                                                              class="absolute right-0 mt-2 bg-white rounded-lg shadow-2xl z-[100] border border-gray-200 p-5 ring-1 ring-black ring-opacity-5" 
                                                              style="width: 300px; display: none;">
                                                             
@@ -238,6 +251,7 @@
 
                                                 <a href="{{ route('queue.print', $queue->id) }}" target="_blank" class="bg-white text-gray-600 hover:text-black border border-gray-300 font-bold py-2 px-3 rounded shadow-sm hover:shadow transition" title="Print Ticket"><svg class="w-4 h-4" style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg></a>
                                                 
+                                                {{-- Inline Cancel Logic --}}
                                                 <div x-data="{ showModal: false }">
                                                     <button @click="showModal = true" class="text-red-300 hover:text-red-500 font-bold px-2 transition duration-150" title="Cancel Ticket"><svg class="w-5 h-5" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                                                     <div x-show="showModal" style="display: none;" class="relative z-50">
@@ -262,6 +276,7 @@
                                                         </div>
                                                     </div>
                                                 </div>
+
                                             </div>
                                         </div>
                                     </li>
@@ -329,7 +344,7 @@
                                             @csrf @method('PATCH')
                                             <input type="hidden" name="status" value="waiting">
                                             <button type="button" 
-                                                    @click="ask('Restore Ticket?', 'Move {{ $h->customer_name }} back to waiting?', 'Restore', 'primary', $el)"
+                                                    @click="ask('Restore Ticket?', @js('Move ' . $h->customer_name . ' back to waiting?'), 'Restore', 'primary', $el)"
                                                     class="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white text-[10px] font-bold uppercase px-3 py-2 rounded transition border border-blue-200">
                                                 Restore
                                             </button>
@@ -349,7 +364,7 @@
             </div>
         </div>
 
-        {{-- 🛑 2. CONFIRMATION MODAL --}}
+        {{-- 🛑 2. CONFIRMATION MODAL (Global) --}}
         <div x-show="confirm.open" 
              style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;" 
              role="dialog" 

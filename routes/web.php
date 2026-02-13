@@ -68,9 +68,13 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // Owner's Office (Dashboard Overview)
     Route::get('/admin', [AdminController::class, 'index'])->name('admin.dashboard');
 
-    // 👇 NEW ANALYTICS & REPORTS PAGE (The Charts)
+    // Analytics & Reports
     Route::get('/admin/reports', [AdminController::class, 'reports'])->name('admin.reports');
     
+    // 👇 NEW: Service Status Toggle (Disable/Enable)
+    // IMPORTANT: Custom routes for resources must go BEFORE Route::resource
+    Route::patch('/services/{service}/toggle', [ServiceController::class, 'toggleStatus'])->name('services.toggle');
+
     // Service Management (Create/Edit/Delete)
     Route::resource('services', ServiceController::class);
 });

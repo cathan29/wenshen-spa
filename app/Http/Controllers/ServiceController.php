@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Service;
 use Illuminate\Http\Request;
 
-
 class ServiceController extends Controller
 {
     /**
@@ -14,11 +13,11 @@ class ServiceController extends Controller
      */
     public function index()
     {
-        // 1. Get all services from the database
-    $services = Service::all();
-    
-    // 2. Send them to the 'index' view (we will build this next)
-    return view('services.index', compact('services'));
+        // 1. Get all services
+        $services = Service::all();
+        
+        // 2. Send them to the 'index' view
+        return view('services.index', compact('services'));
     }
 
     /**
@@ -26,8 +25,7 @@ class ServiceController extends Controller
      */
     public function create()
     {
-        // Show the form to add a new service
-    return view('services.create');
+        return view('services.create');
     }
 
     /**
@@ -35,17 +33,18 @@ class ServiceController extends Controller
      */
     public function store(Request $request)
     {
-        // 1. Validate the input (Security check)
-    $request->validate([
-        'service_name' => 'required|string|max:255',
-        'price' => 'required|numeric',
-    ]);
+        // 1. Validate
+        $request->validate([
+            'service_name' => 'required|string|max:255',
+            'price' => 'required|numeric',
+            'description' => 'nullable|string',
+        ]);
 
-    // 2. Save to Database
-    Service::create($request->all());
+        // 2. Save (Default is_active to true in migration or model)
+        Service::create($request->all());
 
-    // 3. Redirect back with a success message
-    return redirect()->route('services.index')->with('success', 'Service added successfully!');
+        // 3. Redirect
+        return redirect()->route('services.index')->with('success', 'Service added successfully!');
     }
 
     /**
@@ -53,7 +52,7 @@ class ServiceController extends Controller
      */
     public function show(string $id)
     {
-        //
+        // Not used in this project
     }
 
     /**
@@ -61,7 +60,11 @@ class ServiceController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        // 1. Find the service by ID
+        $service = Service::findOrFail($id);
+
+        // 2. Return the edit view
+        return view('services.edit', compact('service'));
     }
 
     /**
@@ -69,14 +72,49 @@ class ServiceController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+        // 1. Find the service
+        $service = Service::findOrFail($id);
+
+        // 2. Validate
+        $validated = $request->validate([
+            'service_name' => 'required|string|max:255',
+            'price' => 'required|numeric',
+            'description' => 'nullable|string',
+        ]);
+
+        // 3. Update
+        $service->update($validated);
+
+        // 4. Redirect
+        return redirect()->route('services.index')->with('success', 'Service updated successfully!');
+    }
+
+    /**
+     * Toggle the service status (Active <-> Inactive).
+     * This replaces the destructive delete action.
+     */
+    public function toggleStatus(string $id)
+    {
+        $service = Service::findOrFail($id);
+
+        // Flip the status (Active becomes Inactive, Inactive becomes Active)
+        $service->is_active = !$service->is_active;
+        $service->save();
+
+        $status = $service->is_active ? 'activated' : 'disabled';
+
+        return redirect()->route('services.index')->with('success', "Service has been $status.");
     }
 
     /**
      * Remove the specified resource from storage.
+     * (Kept for admin emergency use, but UI will use toggleStatus)
      */
     public function destroy(string $id)
     {
-        //
+        $service = Service::findOrFail($id);
+        $service->delete();
+
+        return redirect()->route('services.index')->with('success', 'Service deleted successfully.');
     }
 }
