@@ -71,7 +71,11 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // Analytics & Reports
     Route::get('/admin/reports', [AdminController::class, 'reports'])->name('admin.reports');
     
-    // 👇 NEW: Service Status Toggle (Disable/Enable)
+    // 👇 NEW: PDF & Excel Report Downloads
+    Route::get('/admin/reports/download', [AdminController::class, 'downloadReport'])->name('admin.reports.download'); // PDF
+    Route::get('/admin/reports/download-excel', [AdminController::class, 'downloadExcel'])->name('admin.reports.excel'); // Excel
+    
+    // Service Status Toggle (Disable/Enable)
     // IMPORTANT: Custom routes for resources must go BEFORE Route::resource
     Route::patch('/services/{service}/toggle', [ServiceController::class, 'toggleStatus'])->name('services.toggle');
 

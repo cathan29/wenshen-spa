@@ -13,9 +13,9 @@ export default defineConfig({
     ],
     // 👇 ADD THIS SERVER BLOCK
     server: {
-        host: '0.0.0.0', // Listen on all network addresses
+        host: '0.0.0.0', 
         hmr: {
-            host: '192.168.100.32' // 👈 YOUR LAPTOP'S IP ADDRESS (From your screenshot)
+            host: '192.168.100.32' 
         },
     },
 });
