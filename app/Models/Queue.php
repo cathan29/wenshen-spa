@@ -12,7 +12,7 @@ class Queue extends Model
     // This links the model to your "queues" table
     protected $fillable = [
         'queue_number',
-        'service_id',
+        // ❌ 'service_id' has been removed!
         'customer_name',
         'qr_token',
         'status',
@@ -20,9 +20,16 @@ class Queue extends Model
         'remarks'
     ];
 
-    // This allows us to easily get the service details (like price/name) for this queue
-    public function service()
+    // 🌉 THE BRIDGE: A Queue ticket can now have MULTIPLE services
+    public function services()
     {
-        return $this->belongsTo(Service::class);
+        // 'queue_service' is the name of the pivot table we just made
+        return $this->belongsToMany(Service::class, 'queue_service')->withTimestamps();
+    }
+
+    // 💰 BONUS HELPER: Instantly calculate the total bill for this ticket
+    public function getTotalPriceAttribute()
+    {
+        return $this->services->sum('price');
     }
 }

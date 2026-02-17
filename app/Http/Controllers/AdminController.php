@@ -14,30 +14,27 @@ class AdminController extends Controller
     // 🏠 Dashboard Overview (The Owner's Office)
     public function index()
     {
-        // 1. Calculate Today's Earnings
+        // 1. Calculate Today's Earnings (Using new Multiple Services logic)
         $todayEarnings = Queue::whereDate('updated_at', today())
             ->where('status', 'completed')
-            ->with('service')
+            ->with('services') // 👈 Changed to plural
             ->get()
-            ->sum(fn($q) => $q->service ? $q->service->price : 0);
+            ->sum(fn($q) => $q->total_price); // 👈 Uses your new Model helper!
 
         // 2. Calculate Monthly Revenue
         $monthEarnings = Queue::whereMonth('updated_at', Carbon::now()->month)
             ->where('status', 'completed')
-            ->with('service')
+            ->with('services') // 👈 Changed to plural
             ->get()
-            ->sum(fn($q) => $q->service ? $q->service->price : 0);
+            ->sum(fn($q) => $q->total_price);
 
         // 3. Count Clients Today
         $todayCustomers = Queue::whereDate('created_at', today())->count();
 
-        // 4. 👑 Most Popular Service
-        $topService = Queue::where('status', 'completed')
-            ->select('service_id', DB::raw('count(*) as total'))
-            ->groupBy('service_id')
-            ->orderByDesc('total')
-            ->with('service')
-            ->first();
+        // 4. 👑 Most Popular Service (Updated for Pivot Table)
+        $topService = Service::withCount(['queues' => function($q) {
+            $q->where('status', 'completed');
+        }])->orderByDesc('queues_count')->first();
 
         // 5. 💎 VIP Client
         $topCustomer = Queue::where('status', 'completed')
@@ -48,26 +45,29 @@ class AdminController extends Controller
 
         // 6. Recent History
         $recentTransactions = Queue::where('status', 'completed')
-            ->with('service')
+            ->with('services') // 👈 Changed to plural
             ->latest('updated_at')
             ->take(5)
             ->get();
 
-        return view('admin.dashboard', compact(
-            'todayEarnings', 
-            'monthEarnings', 
-            'todayCustomers', 
-            'topService', 
-            'topCustomer', 
-            'recentTransactions'
-        ));
+        // Format for Dashboard view backwards compatibility
+        $formattedTopService = $topService ? (object)['total' => $topService->queues_count, 'service' => $topService] : null;
+
+        return view('admin.dashboard', [
+            'todayEarnings' => $todayEarnings, 
+            'monthEarnings' => $monthEarnings, 
+            'todayCustomers' => $todayCustomers, 
+            'topService' => $formattedTopService, 
+            'topCustomer' => $topCustomer, 
+            'recentTransactions' => $recentTransactions
+        ]);
     }
 
     // 📈 Analytics & Reports (The Filter Engine & Leaderboards)
     public function reports(Request $request)
     {
-        // 1. START THE BASE QUERY
-        $baseQuery = Queue::where('status', 'completed')->with('service');
+        // 👈 START THE BASE QUERY with 'services'
+        $baseQuery = Queue::where('status', 'completed')->with('services');
 
         // Determine the date boundaries
         if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -77,7 +77,6 @@ class AdminController extends Controller
             $baseQuery->whereBetween('updated_at', [$start, $end]);
             $chartQuery = clone $baseQuery; 
         } else {
-            // Default: Last 7 Days (including today)
             $start = now()->subDays(6)->startOfDay();
             $end = now()->endOfDay();
             
@@ -85,99 +84,94 @@ class AdminController extends Controller
             $chartQuery->whereBetween('updated_at', [$start, $end]);
         }
 
-        // Execute the queries
-        $allData = $baseQuery->get(); // All-time OR Filtered data
-        $chartData = $chartQuery->get(); // 7-Days OR Filtered data
+        $allData = $baseQuery->get(); 
+        $chartData = $chartQuery->get(); 
 
-        // 3. CALCULATE REVENUE (Card #1)
-        $totalLifetime = $allData->sum(fn($q) => $q->service ? $q->service->price : 0);
+        // 3. CALCULATE REVENUE 
+        $totalLifetime = $allData->sum(fn($q) => $q->total_price);
 
         // 4. CALCULATE CHART DATA WITH ZERO-FILLING
         $revenueData = collect();
-        
-        // Create an empty skeleton of dates from Start to End, initialized to 0
         $currentDate = clone $start;
+        
         while ($currentDate->lte($end)) {
             $revenueData->put($currentDate->format('M d'), 0);
             $currentDate->addDay();
         }
 
-        // Pour the actual sales into the skeleton
+        // Pour actual sales into the skeleton
         foreach ($chartData as $data) {
             $dateKey = $data->updated_at->format('M d');
             if ($revenueData->has($dateKey)) {
-                $revenueData[$dateKey] += $data->service ? $data->service->price : 0;
+                $revenueData[$dateKey] += $data->total_price; // 👈 Fixed for multiple services!
             }
         }
 
-        // Format for Chart.js
         $chartLabels = $revenueData->keys();
         $chartValues = $revenueData->values();
 
-        // 5. 🏆 LEADERBOARD 1: TOP TREATMENTS
-        $topTreatments = $allData->groupBy('service_id')->map(function ($group) {
-            return (object) [
-                'service_name' => $group->first()->service ? $group->first()->service->service_name : 'Deleted Service',
-                'total_bookings' => $group->count(),
-                'total_revenue' => $group->sum(fn($q) => $q->service ? $q->service->price : 0),
-            ];
-        })->sortByDesc('total_revenue')->take(5)->values(); // Top 5 by Revenue
+        // 5. 🏆 LEADERBOARD 1: TOP TREATMENTS (Flattened for pivot table)
+        $treatmentStats = [];
+        foreach($allData as $queue) {
+            foreach($queue->services as $service) {
+                if(!isset($treatmentStats[$service->id])) {
+                    $treatmentStats[$service->id] = (object) [
+                        'service_name' => $service->service_name,
+                        'total_bookings' => 0,
+                        'total_revenue' => 0,
+                    ];
+                }
+                $treatmentStats[$service->id]->total_bookings += 1;
+                $treatmentStats[$service->id]->total_revenue += $service->price;
+            }
+        }
+        $topTreatments = collect($treatmentStats)->sortByDesc('total_revenue')->take(5)->values();
 
         // 6. 👑 LEADERBOARD 2: VIP CLIENTS
         $topClients = $allData->groupBy(fn($q) => strtolower(trim($q->customer_name)))
             ->map(function ($group) {
                 return (object) [
-                    // Capitalize names nicely (e.g. "juan dela cruz" -> "Juan Dela Cruz")
                     'customer_name' => ucwords(strtolower(trim($group->first()->customer_name))),
                     'total_visits' => $group->count(),
                 ];
-            })->sortByDesc('total_visits')->take(5)->values(); // Top 5 by Visits
+            })->sortByDesc('total_visits')->take(5)->values(); 
 
-        // Send everything to the Blade view!
         return view('admin.reports', compact(
-            'chartLabels', 
-            'chartValues', 
-            'totalLifetime', 
-            'topTreatments', 
-            'topClients'
+            'chartLabels', 'chartValues', 'totalLifetime', 'topTreatments', 'topClients'
         ));
     }
 
     // 🖨️ Generate & Download PDF Report
     public function downloadReport(Request $request)
     {
-        $baseQuery = Queue::where('status', 'completed')->with('service');
+        $baseQuery = Queue::where('status', 'completed')->with('services');
         $period = "All-Time Lifetime Report";
 
-        // Apply Date Filter if present
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $start = Carbon::parse($request->start_date)->startOfDay();
             $end = Carbon::parse($request->end_date)->endOfDay();
             $baseQuery->whereBetween('updated_at', [$start, $end]);
-            
             $period = $start->format('M d, Y') . ' to ' . $end->format('M d, Y');
         }
 
         $allData = $baseQuery->orderBy('updated_at', 'desc')->get();
-        $totalRevenue = $allData->sum(fn($q) => $q->service ? $q->service->price : 0);
+        $totalRevenue = $allData->sum(fn($q) => $q->total_price);
         $totalClients = $allData->count();
 
-        // Pass data to a specific PDF Blade view
+        // Format services as a comma-separated string for the PDF
+        foreach($allData as $data) {
+            $data->service_list = $data->services->pluck('service_name')->join(', ');
+        }
+
         $pdf = Pdf::loadView('admin.pdf_report', compact('allData', 'totalRevenue', 'totalClients', 'period'));
-
-        // Name the downloaded file
-        $fileName = 'Wenshen_Report_' . Carbon::now()->format('Y_m_d') . '.pdf';
-
-        // Download it!
-        return $pdf->download($fileName);
+        return $pdf->download('Wenshen_Report_' . Carbon::now()->format('Y_m_d') . '.pdf');
     }
 
     // 📊 Generate & Download Excel (CSV) Report
     public function downloadExcel(Request $request)
     {
-        $baseQuery = Queue::where('status', 'completed')->with('service');
+        $baseQuery = Queue::where('status', 'completed')->with('services');
 
-        // Apply Date Filter if present
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $start = Carbon::parse($request->start_date)->startOfDay();
             $end = Carbon::parse($request->end_date)->endOfDay();
@@ -187,7 +181,6 @@ class AdminController extends Controller
         $allData = $baseQuery->orderBy('updated_at', 'desc')->get();
         $fileName = 'Wenshen_Sales_Report_' . Carbon::now()->format('Y_m_d') . '.csv';
 
-        // Set the headers to tell the browser this is an Excel/CSV file
         $headers = [
             "Content-type"        => "text/csv",
             "Content-Disposition" => "attachment; filename=$fileName",
@@ -196,33 +189,28 @@ class AdminController extends Controller
             "Expires"             => "0"
         ];
 
-        // Define the columns for the top of the Excel sheet
-        $columns = ['Date & Time', 'Client Name', 'Treatment', 'Amount (Php)'];
+        $columns = ['Date & Time', 'Client Name', 'Treatments', 'Amount (Php)'];
 
-        // Build the file stream
         $callback = function() use($allData, $columns) {
             $file = fopen('php://output', 'w');
-            fputcsv($file, $columns); // Write the header row
+            fputcsv($file, $columns); 
 
-            // Loop through the data and write each row
             foreach ($allData as $data) {
                 $row = [
                     $data->updated_at->format('M d, Y h:i A'),
                     $data->customer_name,
-                    $data->service ? $data->service->service_name : 'Deleted Service',
-                    $data->service ? $data->service->price : '0'
+                    $data->services->pluck('service_name')->join(', '), // 👈 Lists all treatments!
+                    $data->total_price // 👈 Math is perfect
                 ];
                 fputcsv($file, $row);
             }
 
-            // Add a final "Total Revenue" row at the bottom
-            $totalRevenue = $allData->sum(fn($q) => $q->service ? $q->service->price : 0);
+            $totalRevenue = $allData->sum(fn($q) => $q->total_price);
             fputcsv($file, ['', '', 'TOTAL REVENUE:', $totalRevenue]);
 
             fclose($file);
         };
 
-        // Return the native Laravel file download
         return response()->stream($callback, 200, $headers);
     }
 }

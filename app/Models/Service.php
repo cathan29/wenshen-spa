@@ -14,4 +14,10 @@ class Service extends Model
         'price', 
         'is_active'
     ];
+
+    // 🌉 THE REVERSE BRIDGE: A Service can belong to MULTIPLE queue tickets
+    public function queues()
+    {
+        return $this->belongsToMany(Queue::class, 'queue_service')->withTimestamps();
+    }
 }

@@ -11,15 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('queues', function (Blueprint $table) {
+        Schema::create('queue_service', function (Blueprint $table) {
             $table->id();
-            $table->string('queue_number');
-            $table->string('customer_name')->nullable();
             
-            // ✂️ The service_id constraint has been removed from here! 
+            // 🌉 The Bridge connecting the Queue and the Service
+            $table->foreignId('queue_id')->constrained()->onDelete('cascade');
+            $table->foreignId('service_id')->constrained()->onDelete('cascade');
             
-            $table->string('qr_token')->unique();
-            $table->enum('status', ['waiting', 'serving', 'completed', 'cancelled'])->default('waiting');  
             $table->timestamps();
         });
     }
@@ -29,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('queues');
+        Schema::dropIfExists('queue_service');
     }
 };

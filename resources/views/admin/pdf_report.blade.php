@@ -11,7 +11,7 @@
         .summary-box { background-color: #F9F3E3; padding: 15px; border-radius: 5px; margin-bottom: 30px; }
         .summary-box h3 { margin: 0 0 10px 0; color: #6B4E31; font-size: 16px; text-transform: uppercase; }
         .total-rev { font-size: 24px; font-weight: bold; color: #6B4E31; }
-        table { w-full: 100%; border-collapse: collapse; margin-top: 20px; width: 100%; }
+        table { border-collapse: collapse; margin-top: 20px; width: 100%; }
         th { background-color: #6B4E31; color: white; text-align: left; padding: 12px; font-size: 12px; text-transform: uppercase; }
         td { border-bottom: 1px solid #eee; padding: 12px; font-size: 14px; }
         .text-right { text-align: right; }
@@ -27,7 +27,7 @@
 
     <div class="summary-box">
         <h3>Executive Summary</h3>
-        <p style="margin:0;">Total Completed Services: <strong>{{ $totalClients }}</strong></p>
+        <p style="margin:0;">Total Completed Clients: <strong>{{ $totalClients }}</strong></p>
         <p style="margin:5px 0 0 0;">Total Revenue Generated: <span class="total-rev">Php {{ number_format($totalRevenue, 2) }}</span></p>
     </div>
 
@@ -36,7 +36,7 @@
             <tr>
                 <th>Date / Time</th>
                 <th>Client Name</th>
-                <th>Treatment</th>
+                <th>Treatments</th>
                 <th class="text-right">Amount (Php)</th>
             </tr>
         </thead>
@@ -45,8 +45,12 @@
                 <tr>
                     <td>{{ $data->updated_at->format('M d, Y h:i A') }}</td>
                     <td>{{ $data->customer_name }}</td>
-                    <td>{{ $data->service ? $data->service->service_name : 'Deleted Service' }}</td>
-                    <td class="text-right">{{ $data->service ? number_format($data->service->price, 2) : '0.00' }}</td>
+                    
+                    {{-- 👇 NOW SHOWS MULTIPLE SERVICES PROPERLY --}}
+                    <td>{{ $data->service_list ?: 'Deleted Service' }}</td>
+                    
+                    {{-- 👇 CALCULATES TOTAL PRICE PERFECTLY --}}
+                    <td class="text-right">{{ number_format($data->total_price, 2) }}</td>
                 </tr>
             @empty
                 <tr>

@@ -30,7 +30,6 @@
                 this.confirm.type = type;
 
                 // 3. Bind Action (Submit the specific form connected to the clicked button)
-                // We use a closure to capture the form element immediately
                 let form = triggerEl.closest('form');
                 if (form) {
                     this.confirm.action = () => form.submit();
@@ -79,23 +78,28 @@
                         
                         <form action="{{ route('queue.store') }}" method="POST" class="relative z-10">
                             @csrf
+                            
+                            {{-- 🔄 MULTI-SELECT TREATMENTS --}}
                             <div class="mb-6">
-                                <label class="block font-bold mb-2 text-xs uppercase tracking-widest text-[#6B4E31]">Select Service</label>
+                                <label class="block font-bold mb-2 text-xs uppercase tracking-widest text-[#6B4E31]">
+                                    Select Services <span class="text-[9px] text-gray-400 normal-case">(Hold Ctrl/Cmd to select multiple)</span>
+                                </label>
                                 <div class="relative">
-                                    <select name="service_id" class="block w-full bg-[#F9F3E3] border border-[#eaddc5] text-[#4a3b2a] py-3 px-4 pr-8 rounded leading-tight focus:outline-none focus:bg-white focus:border-[#D4AF37] transition" required>
-                                        <option value="">-- Choose Treatment --</option>
+                                    <select name="service_ids[]" multiple class="block w-full bg-[#F9F3E3] border border-[#eaddc5] text-[#4a3b2a] py-3 px-4 rounded leading-tight focus:outline-none focus:bg-white focus:border-[#D4AF37] transition h-32" required>
                                         @foreach($services as $service)
-                                            <option value="{{ $service->id }}">
+                                            <option value="{{ $service->id }}" class="p-2 border-b border-[#eaddc5] hover:bg-[#D4AF37] hover:text-white transition cursor-pointer">
                                                 {{ $service->service_name }} (₱{{ number_format($service->price, 0) }})
                                             </option>
                                         @endforeach
                                     </select>
                                 </div>
                             </div>
+
                             <div class="mb-8">
                                 <label class="block font-bold mb-2 text-xs uppercase tracking-widest text-[#6B4E31]">Customer Name</label>
                                 <input type="text" name="customer_name" class="appearance-none block w-full bg-[#F9F3E3] text-[#4a3b2a] border border-[#eaddc5] rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-[#D4AF37] transition" placeholder="e.g. Ma'am Jane">
                             </div>
+
                             <button type="submit" class="w-full text-white font-bold py-4 rounded shadow-lg hover:shadow-xl transition duration-200 uppercase tracking-widest text-sm flex justify-center items-center gap-2" style="background-color: #6B4E31;">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -181,7 +185,13 @@
                                                         @endif
                                                     </div>
                                                     <span class="text-sm font-bold block text-gray-800">{{ $queue->customer_name }}</span>
-                                                    <span class="text-xs text-gray-500 block uppercase tracking-wide">{{ $queue->service->service_name }}</span>
+                                                    
+                                                    {{-- 🔄 DISPLAY MULTIPLE SERVICES AS TAGS --}}
+                                                    <div class="text-xs text-gray-500 block uppercase tracking-wide mt-1">
+                                                        @foreach($queue->services as $s)
+                                                            <span class="inline-block bg-[#F9F3E3] border border-[#eaddc5] px-2 py-0.5 rounded text-[10px] mr-1 mb-1 shadow-sm">{{ $s->service_name }}</span>
+                                                        @endforeach
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -206,7 +216,7 @@
                                                         <button type="button" 
                                                                 @click="ask('Mark No Show?', @js('Remove ' . $queue->customer_name . '?'), 'Confirm', 'danger', $el)"
                                                                 class="text-gray-400 hover:text-gray-600 p-2" title="Mark as No Show">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                                                         </button>
                                                     </form>
                                                 @endif
@@ -227,7 +237,7 @@
                                                     <div class="relative z-50">
                                                         <button @click="activeDropdown = (activeDropdown === {{ $queue->id }} ? null : {{ $queue->id }})" 
                                                                 class="text-white text-xs font-bold py-2 px-3 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #4A5568;" title="Add another service">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add
                                                         </button>
                                                         
                                                         <div x-show="activeDropdown === {{ $queue->id }}" 
@@ -237,13 +247,17 @@
                                                             
                                                             <form action="{{ route('queue.addService', $queue->id) }}" method="POST">
                                                                 @csrf
-                                                                <div class="flex items-center mb-3"><label class="block text-xs uppercase font-bold text-gray-600 tracking-wide whitespace-nowrap">Next Service</label></div>
-                                                                <select name="service_id" class="w-full text-sm border-gray-300 rounded-md mb-4 py-2 px-3" required>
+                                                                <div class="flex items-center mb-3">
+                                                                    <label class="block text-xs uppercase font-bold text-gray-600 tracking-wide whitespace-nowrap">Next Services</label>
+                                                                </div>
+                                                                {{-- 🔄 MULTI-SELECT FOR FOLLOW-UP --}}
+                                                                <select name="service_ids[]" multiple class="w-full text-sm border-gray-300 rounded-md mb-4 py-2 px-3 h-24" required>
                                                                     @foreach($services as $service)
                                                                         <option value="{{ $service->id }}">{{ $service->service_name }} (₱{{ number_format($service->price, 0) }})</option>
                                                                     @endforeach
                                                                 </select>
-                                                                <button type="submit" class="w-full text-white text-sm font-bold py-3 rounded-md uppercase tracking-wider bg-stone-700">Confirm Add</button>
+                                                                <p class="text-[9px] text-gray-400 -mt-2 mb-3 leading-tight">* Hold Ctrl/Cmd for multiple</p>
+                                                                <button type="submit" class="w-full text-white text-sm font-bold py-3 rounded-md uppercase tracking-wider bg-stone-700 hover:bg-stone-800 transition">Confirm Add</button>
                                                             </form>
                                                         </div>
                                                     </div>
@@ -338,7 +352,13 @@
                                     <div class="flex justify-between items-center border-t border-gray-100 pt-2">
                                         <div class="flex flex-col">
                                             <span class="text-sm font-bold text-gray-700">{{ $h->customer_name }}</span>
-                                            <span class="text-[10px] font-bold text-gray-500 uppercase">{{ $h->service->service_name }}</span>
+                                            
+                                            {{-- 🔄 SHOW MULTIPLE TAGS IN HISTORY --}}
+                                            <div class="mt-1">
+                                                @foreach($h->services as $s)
+                                                    <span class="inline-block bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider mr-1 mb-1">{{ $s->service_name }}</span>
+                                                @endforeach
+                                            </div>
                                         </div>
                                         <form action="{{ route('queue.updateStatus', $h->id) }}" method="POST">
                                             @csrf @method('PATCH')

@@ -28,13 +28,13 @@ class QueueController extends Controller
                                ->orderBy('updated_at', 'desc')
                                ->get();
 
-        // Calculate Total Earnings (Only 'completed' tickets count)
+        // Calculate Total Earnings (Sums up ALL services attached to completed tickets)
         $totalEarnings = Queue::whereDate('created_at', today())
                               ->where('status', 'completed')
-                              ->with('service')
+                              ->with('services') // 👈 CHANGED to plural
                               ->get()
                               ->sum(function($q) {
-                                  return $q->service->price;
+                                  return $q->total_price; // 👈 Uses the new helper from your Model!
                               });
 
         return view('dashboard', compact('services', 'todaysQueue', 'completedQueue', 'totalEarnings'));
@@ -43,23 +43,28 @@ class QueueController extends Controller
     // 2. Add New Client
     public function store(Request $request)
     {
+        // 👈 CHANGED: Now validates an array of multiple service IDs
         $request->validate([
-            'service_id' => 'required|exists:services,id',
+            'service_ids'   => 'required|array',
+            'service_ids.*' => 'exists:services,id',
             'customer_name' => 'nullable|string|max:255',
         ]);
 
+        // Create the Ticket first (Notice: no service_id here anymore!)
         $queue = Queue::create([
-            'queue_number' => $this->generateQueueNumber(),
-            'service_id' => $request->service_id,
+            'queue_number'  => $this->generateQueueNumber(),
             'customer_name' => $request->customer_name ?? 'Guest',
-            'qr_token' => Str::random(32),
-            'status' => 'waiting',
+            'qr_token'      => Str::random(32),
+            'status'        => 'waiting',
         ]);
+
+        // ✨ THE MAGIC STEP: Attach all selected treatments to this ticket!
+        $queue->services()->attach($request->service_ids);
 
         return redirect()->route('dashboard')->with('success', "Client added! Queue Number: {$queue->queue_number}");
     }
 
-    // 3. Status Page (FIXED LOGIC HERE)
+    // 3. Status Page
     public function show($qr_token)
     {
         $queue = Queue::where('qr_token', $qr_token)->firstOrFail();
@@ -69,7 +74,7 @@ class QueueController extends Controller
             return view('queue.expired', compact('queue'));
         }
 
-        // 👇 FIXED: This counts only those WAITING who joined BEFORE this specific ticket ID
+        // Counts only those WAITING who joined BEFORE this specific ticket ID
         $peopleAhead = Queue::where('status', 'waiting')
                             ->whereDate('created_at', today())
                             ->where('id', '<', $queue->id) 
@@ -79,33 +84,32 @@ class QueueController extends Controller
     }
 
     // 4. The Public Monitor Screen (Big TV)
-   public function monitor()
-{
-    // 1. Get everyone currently being served (limit to 4 for the grid)
-    $serving = Queue::where('status', 'serving')
-                    ->whereDate('created_at', today())
-                    ->with('service')
-                    ->orderBy('updated_at', 'desc') 
-                    ->take(4)
-                    ->get();
+    public function monitor()
+    {
+        // Get everyone currently being served
+        $serving = Queue::where('status', 'serving')
+                        ->whereDate('created_at', today())
+                        ->with('services') // 👈 CHANGED to plural
+                        ->orderBy('updated_at', 'desc') 
+                        ->take(4)
+                        ->get();
 
-    // 2. Identify the "Recently Called" group
-    // This allows the monitor to announce multiple people if they are called close together
-    $recentlyCalled = $serving->where('updated_at', '>=', now()->subSeconds(20));
+        // Identify the "Recently Called" group
+        $recentlyCalled = $serving->where('updated_at', '>=', now()->subSeconds(20));
 
-    $waiting = Queue::where('status', 'waiting')
-                    ->whereDate('created_at', today())
-                    ->orderBy('id', 'asc')
-                    ->take(5)
-                    ->get();
+        $waiting = Queue::where('status', 'waiting')
+                        ->whereDate('created_at', today())
+                        ->orderBy('id', 'asc')
+                        ->take(5)
+                        ->get();
 
-    return view('queue.monitor', compact('serving', 'waiting', 'recentlyCalled'));
-}
+        return view('queue.monitor', compact('serving', 'waiting', 'recentlyCalled'));
+    }
 
     // 5. Print Ticket
     public function printTicket($id)
     {
-        $queue = Queue::with('service')->findOrFail($id);
+        $queue = Queue::with('services')->findOrFail($id); // 👈 CHANGED to plural
         return view('queue.ticket', compact('queue'));
     }
 
@@ -126,19 +130,23 @@ class QueueController extends Controller
     {
         $currentTicket = Queue::findOrFail($id);
         
+        // 👈 CHANGED: Now validates an array
         $request->validate([
-            'service_id' => 'required|exists:services,id',
+            'service_ids'   => 'required|array',
+            'service_ids.*' => 'exists:services,id',
         ]);
 
         $currentTicket->update(['status' => 'completed']);
 
-        Queue::create([
-            'service_id' => $request->service_id,
+        $newTicket = Queue::create([
             'customer_name' => $currentTicket->customer_name,
-            'queue_number' => $currentTicket->queue_number, 
-            'status' => 'serving',                            
-            'qr_token' => Str::random(32),
+            'queue_number'  => $currentTicket->queue_number, 
+            'status'        => 'serving',                            
+            'qr_token'      => Str::random(32),
         ]);
+
+        // Attach the new follow-up treatments!
+        $newTicket->services()->attach($request->service_ids);
 
         return redirect()->back()->with('success', "Follow-up service added!");
     }
@@ -149,7 +157,7 @@ class QueueController extends Controller
         $queue = Queue::findOrFail($id);
         
         $queue->update([
-            'status' => 'cancel_requested',
+            'status'  => 'cancel_requested',
             'remarks' => $request->remarks ?? 'Client requested cancellation',
         ]);
 
