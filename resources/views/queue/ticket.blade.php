@@ -74,12 +74,14 @@
         {{ $queue->queue_number }}
     </div>
 
+    {{-- 👇 NOW SHOWS ALL TREATMENTS --}}
     <div class="service-info">
-        {{ $queue->service->service_name }}
+        {{ $queue->services->pluck('service_name')->join(', ') }}
     </div>
 
+    {{-- 👇 NOW USES TOTAL PRICE --}}
     <div class="meta-info">
-        Price: ₱{{ number_format($queue->service->price, 0) }}<br>
+        Price: ₱{{ number_format($queue->total_price, 0) }}<br>
         Date: {{ $queue->created_at->format('M d, Y') }}<br>
         Time: {{ $queue->created_at->format('h:i A') }}
     </div>

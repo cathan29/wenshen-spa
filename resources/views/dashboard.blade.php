@@ -6,6 +6,11 @@
         </h2>
     </x-slot>
 
+    {{-- ✨ BULLETPROOF FIX: We load the services into JS here so it doesn't break the HTML quotes below! --}}
+    <script>
+        window.spaServices = @json($services->map(fn($s) => ['id' => $s->id, 'name' => $s->service_name . ' (₱' . number_format($s->price, 0) . ')']));
+    </script>
+
     {{-- 🟢 MAIN WRAPPER --}}
     <div x-data="{ 
             showHistory: false,
@@ -19,26 +24,18 @@
                 action: null
             },
             ask(title, message, btnText, type, triggerEl) {
-                // 1. Reset Modal State
                 this.confirm.open = false; 
                 this.confirm.action = null;
-
-                // 2. Set Content
                 this.confirm.title = title;
                 this.confirm.message = message;
                 this.confirm.btnText = btnText;
                 this.confirm.type = type;
 
-                // 3. Bind Action (Submit the specific form connected to the clicked button)
                 let form = triggerEl.closest('form');
                 if (form) {
                     this.confirm.action = () => form.submit();
-                } else {
-                    console.warn('No form found for confirmation');
-                    return;
                 }
 
-                // 4. Open Modal using nextTick for reliable re-render
                 this.$nextTick(() => {
                     this.confirm.open = true;
                 });
@@ -79,25 +76,78 @@
                         <form action="{{ route('queue.store') }}" method="POST" class="relative z-10">
                             @csrf
                             
-                            {{-- 🔄 MULTI-SELECT TREATMENTS --}}
+                            {{-- ✨ CLEANED LIVE SEARCH MULTI-SELECT --}}
                             <div class="mb-6">
                                 <label class="block font-bold mb-2 text-xs uppercase tracking-widest text-[#6B4E31]">
-                                    Select Services <span class="text-[9px] text-gray-400 normal-case">(Hold Ctrl/Cmd to select multiple)</span>
+                                    Search & Select Services
                                 </label>
-                                <div class="relative">
-                                    <select name="service_ids[]" multiple class="block w-full bg-[#F9F3E3] border border-[#eaddc5] text-[#4a3b2a] py-3 px-4 rounded leading-tight focus:outline-none focus:bg-white focus:border-[#D4AF37] transition h-32" required>
-                                        @foreach($services as $service)
-                                            <option value="{{ $service->id }}" class="p-2 border-b border-[#eaddc5] hover:bg-[#D4AF37] hover:text-white transition cursor-pointer">
-                                                {{ $service->service_name }} (₱{{ number_format($service->price, 0) }})
-                                            </option>
-                                        @endforeach
-                                    </select>
+                                
+                                <div x-data="{
+                                        open: false,
+                                        search: '',
+                                        selected: [],
+                                        options: window.spaServices,
+                                        get filteredOptions() {
+                                            if (this.search === '') return this.options;
+                                            return this.options.filter(o => o.name.toLowerCase().includes(this.search.toLowerCase()));
+                                        },
+                                        toggle(id) {
+                                            if (this.selected.includes(id)) {
+                                                this.selected = this.selected.filter(i => i !== id);
+                                            } else {
+                                                this.selected.push(id);
+                                                this.search = ''; 
+                                                this.$refs.searchInput.focus();
+                                            }
+                                        },
+                                        remove(id) {
+                                            this.selected = this.selected.filter(i => i !== id);
+                                        }
+                                    }" 
+                                    @click.away="open = false"
+                                    class="relative">
+                                    
+                                    <div class="min-h-[50px] w-full bg-[#F9F3E3] border border-[#eaddc5] p-2 rounded flex flex-wrap gap-2 items-center cursor-text transition focus-within:bg-white focus-within:border-[#D4AF37]" 
+                                         @click="open = true; $refs.searchInput.focus()">
+                                        
+                                        <template x-for="id in selected" :key="id">
+                                            <span class="bg-[#D4AF37] text-white text-xs px-2 py-1 rounded shadow-sm flex items-center gap-1 font-bold">
+                                                <span x-text="options.find(o => o.id === id)?.name"></span>
+                                                <button type="button" @click.stop="remove(id)" class="hover:text-red-200 ml-1 leading-none">&times;</button>
+                                            </span>
+                                        </template>
+                                        
+                                        <input x-ref="searchInput" type="text" x-model="search" placeholder="Type to search treatments..." 
+                                               class="flex-1 bg-transparent border-none focus:ring-0 p-1 text-sm text-[#4a3b2a] min-w-[150px] outline-none"
+                                               @keydown.enter.prevent="if(filteredOptions.length > 0) toggle(filteredOptions[0].id)">
+                                    </div>
+
+                                    <div x-show="open" x-transition.opacity 
+                                         class="absolute z-50 w-full mt-1 bg-white border border-[#eaddc5] rounded-md shadow-xl max-h-60 overflow-y-auto" style="display: none;">
+                                        <template x-for="option in filteredOptions" :key="option.id">
+                                            <div @click="toggle(option.id)" 
+                                                 class="px-4 py-3 cursor-pointer transition flex justify-between items-center text-sm border-b border-gray-100 last:border-0 hover:bg-[#F9F3E3]"
+                                                 :class="selected.includes(option.id) ? 'bg-[#fff9ee] font-bold text-[#6B4E31]' : 'text-gray-700'">
+                                                <span x-text="option.name"></span>
+                                                <span x-show="selected.includes(option.id)" class="text-[#D4AF37]">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                                </span>
+                                            </div>
+                                        </template>
+                                        <div x-show="filteredOptions.length === 0" class="px-4 py-3 text-sm text-gray-500 text-center italic">
+                                            No matching treatments found.
+                                        </div>
+                                    </div>
+
+                                    <template x-for="id in selected">
+                                        <input type="hidden" name="service_ids[]" :value="id">
+                                    </template>
                                 </div>
                             </div>
 
                             <div class="mb-8">
                                 <label class="block font-bold mb-2 text-xs uppercase tracking-widest text-[#6B4E31]">Customer Name</label>
-                                <input type="text" name="customer_name" class="appearance-none block w-full bg-[#F9F3E3] text-[#4a3b2a] border border-[#eaddc5] rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-[#D4AF37] transition" placeholder="e.g. Ma'am Jane">
+                                <input type="text" name="customer_name" class="appearance-none block w-full bg-[#F9F3E3] text-[#4a3b2a] border border-[#eaddc5] rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-[#D4AF37] transition" placeholder="e.g. Ma'am Jane" required>
                             </div>
 
                             <button type="submit" class="w-full text-white font-bold py-4 rounded shadow-lg hover:shadow-xl transition duration-200 uppercase tracking-widest text-sm flex justify-center items-center gap-2" style="background-color: #6B4E31;">
@@ -112,7 +162,6 @@
                     {{-- 👉 RIGHT SIDE: QUEUE LIST --}}
                     <div class="bg-white shadow-xl sm:rounded-2xl p-8 border-t-8 min-h-[600px] relative" style="border-color: #D4AF37;">
                         
-                        {{-- Cancellation Requests --}}
                         @php $requests = $todaysQueue->where('status', 'cancel_requested'); @endphp
                         @if($requests->count() > 0)
                             <div class="mb-8 border-l-4 border-red-500 bg-red-50 p-6 rounded shadow-sm">
@@ -170,7 +219,6 @@
                                         
                                         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
                                             
-                                            {{-- Info --}}
                                             <div class="flex items-center space-x-5 w-full sm:w-auto">
                                                 <div class="bg-white p-2 border border-[#F3E5AB] rounded shadow-sm">
                                                     {!! QrCode::size(45)->generate(route('queue.show', $queue->qr_token)) !!}
@@ -186,19 +234,16 @@
                                                     </div>
                                                     <span class="text-sm font-bold block text-gray-800">{{ $queue->customer_name }}</span>
                                                     
-                                                    {{-- 🔄 DISPLAY MULTIPLE SERVICES AS TAGS --}}
                                                     <div class="text-xs text-gray-500 block uppercase tracking-wide mt-1">
                                                         @foreach($queue->services as $s)
-                                                            <span class="inline-block bg-[#F9F3E3] border border-[#eaddc5] px-2 py-0.5 rounded text-[10px] mr-1 mb-1 shadow-sm">{{ $s->service_name }}</span>
+                                                            <span class="inline-block bg-[#F9F3E3] border border-[#eaddc5] px-2 py-0.5 rounded text-[10px] mr-1 mb-1 shadow-sm text-[#6B4E31] font-bold">{{ $s->service_name }}</span>
                                                         @endforeach
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {{-- Buttons --}}
                                             <div class="flex items-center space-x-2">
                                                 @if($queue->status === 'waiting')
-                                                    {{-- CALL BUTTON --}}
                                                     <form action="{{ route('queue.updateStatus', $queue->id) }}" method="POST">
                                                         @csrf @method('PATCH')
                                                         <input type="hidden" name="status" value="serving">
@@ -209,7 +254,6 @@
                                                         </button>
                                                     </form>
 
-                                                    {{-- NO SHOW BUTTON --}}
                                                     <form action="{{ route('queue.updateStatus', $queue->id) }}" method="POST">
                                                         @csrf @method('PATCH')
                                                         <input type="hidden" name="status" value="no_show">
@@ -222,7 +266,6 @@
                                                 @endif
 
                                                 @if($queue->status === 'serving')
-                                                    {{-- DONE BUTTON --}}
                                                     <form action="{{ route('queue.updateStatus', $queue->id) }}" method="POST">
                                                         @csrf @method('PATCH')
                                                         <input type="hidden" name="status" value="completed">
@@ -233,7 +276,6 @@
                                                         </button>
                                                     </form>
 
-                                                    {{-- DROPDOWN TOGGLE --}}
                                                     <div class="relative z-50">
                                                         <button @click="activeDropdown = (activeDropdown === {{ $queue->id }} ? null : {{ $queue->id }})" 
                                                                 class="text-white text-xs font-bold py-2 px-3 rounded shadow hover:opacity-90 transition uppercase tracking-wider flex items-center gap-2" style="background-color: #4A5568;" title="Add another service">
@@ -243,20 +285,68 @@
                                                         <div x-show="activeDropdown === {{ $queue->id }}" 
                                                              @click.away="activeDropdown = null" 
                                                              class="absolute right-0 mt-2 bg-white rounded-lg shadow-2xl z-[100] border border-gray-200 p-5 ring-1 ring-black ring-opacity-5" 
-                                                             style="width: 300px; display: none;">
+                                                             style="width: 350px; display: none;">
                                                             
                                                             <form action="{{ route('queue.addService', $queue->id) }}" method="POST">
                                                                 @csrf
                                                                 <div class="flex items-center mb-3">
-                                                                    <label class="block text-xs uppercase font-bold text-gray-600 tracking-wide whitespace-nowrap">Next Services</label>
+                                                                    <label class="block text-xs uppercase font-bold text-gray-600 tracking-wide whitespace-nowrap">Add Next Services</label>
                                                                 </div>
-                                                                {{-- 🔄 MULTI-SELECT FOR FOLLOW-UP --}}
-                                                                <select name="service_ids[]" multiple class="w-full text-sm border-gray-300 rounded-md mb-4 py-2 px-3 h-24" required>
-                                                                    @foreach($services as $service)
-                                                                        <option value="{{ $service->id }}">{{ $service->service_name }} (₱{{ number_format($service->price, 0) }})</option>
-                                                                    @endforeach
-                                                                </select>
-                                                                <p class="text-[9px] text-gray-400 -mt-2 mb-3 leading-tight">* Hold Ctrl/Cmd for multiple</p>
+                                                                
+                                                                {{-- ✨ CLEANED LIVE SEARCH FOR FOLLOW-UP SERVICES --}}
+                                                                <div x-data="{
+                                                                        open: false,
+                                                                        search: '',
+                                                                        selected: [],
+                                                                        options: window.spaServices,
+                                                                        get filteredOptions() {
+                                                                            if (this.search === '') return this.options;
+                                                                            return this.options.filter(o => o.name.toLowerCase().includes(this.search.toLowerCase()));
+                                                                        },
+                                                                        toggle(id) {
+                                                                            if (this.selected.includes(id)) {
+                                                                                this.selected = this.selected.filter(i => i !== id);
+                                                                            } else {
+                                                                                this.selected.push(id);
+                                                                                this.search = '';
+                                                                                this.$refs.searchInput.focus();
+                                                                            }
+                                                                        },
+                                                                        remove(id) {
+                                                                            this.selected = this.selected.filter(i => i !== id);
+                                                                        }
+                                                                    }" 
+                                                                    @click.away="open = false" class="relative mb-4">
+                                                                    
+                                                                    <div class="min-h-[40px] w-full border border-gray-300 rounded-md p-1.5 flex flex-wrap gap-1 items-center cursor-text bg-white" @click="open = true; $refs.searchInput.focus()">
+                                                                        <template x-for="id in selected" :key="id">
+                                                                            <span class="bg-gray-200 text-gray-700 text-[10px] px-2 py-1 rounded-sm flex items-center gap-1 font-bold">
+                                                                                <span x-text="options.find(o => o.id === id)?.name"></span>
+                                                                                <button type="button" @click.stop="remove(id)" class="hover:text-red-500 ml-1 leading-none">&times;</button>
+                                                                            </span>
+                                                                        </template>
+                                                                        <input x-ref="searchInput" type="text" x-model="search" placeholder="Search..." 
+                                                                               class="flex-1 bg-transparent border-none focus:ring-0 p-1 text-xs text-gray-700 outline-none"
+                                                                               @keydown.enter.prevent="if(filteredOptions.length > 0) toggle(filteredOptions[0].id)">
+                                                                    </div>
+
+                                                                    <div x-show="open" x-transition.opacity 
+                                                                         class="absolute z-[110] w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto" style="display: none;">
+                                                                        <template x-for="option in filteredOptions" :key="option.id">
+                                                                            <div @click="toggle(option.id)" 
+                                                                                 class="px-3 py-2 cursor-pointer transition flex justify-between items-center text-xs border-b border-gray-50 hover:bg-gray-100"
+                                                                                 :class="selected.includes(option.id) ? 'bg-gray-50 font-bold text-black' : 'text-gray-600'">
+                                                                                <span x-text="option.name"></span>
+                                                                                <span x-show="selected.includes(option.id)" class="text-green-500">✓</span>
+                                                                            </div>
+                                                                        </template>
+                                                                    </div>
+                                                                    
+                                                                    <template x-for="id in selected">
+                                                                        <input type="hidden" name="service_ids[]" :value="id">
+                                                                    </template>
+                                                                </div>
+
                                                                 <button type="submit" class="w-full text-white text-sm font-bold py-3 rounded-md uppercase tracking-wider bg-stone-700 hover:bg-stone-800 transition">Confirm Add</button>
                                                             </form>
                                                         </div>
@@ -265,7 +355,6 @@
 
                                                 <a href="{{ route('queue.print', $queue->id) }}" target="_blank" class="bg-white text-gray-600 hover:text-black border border-gray-300 font-bold py-2 px-3 rounded shadow-sm hover:shadow transition" title="Print Ticket"><svg class="w-4 h-4" style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg></a>
                                                 
-                                                {{-- Inline Cancel Logic --}}
                                                 <div x-data="{ showModal: false }">
                                                     <button @click="showModal = true" class="text-red-300 hover:text-red-500 font-bold px-2 transition duration-150" title="Cancel Ticket"><svg class="w-5 h-5" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                                                     <div x-show="showModal" style="display: none;" class="relative z-50">
@@ -353,7 +442,6 @@
                                         <div class="flex flex-col">
                                             <span class="text-sm font-bold text-gray-700">{{ $h->customer_name }}</span>
                                             
-                                            {{-- 🔄 SHOW MULTIPLE TAGS IN HISTORY --}}
                                             <div class="mt-1">
                                                 @foreach($h->services as $s)
                                                     <span class="inline-block bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider mr-1 mb-1">{{ $s->service_name }}</span>
@@ -418,31 +506,24 @@
                     </div>
                     
                     <div class="mt-5 sm:mt-4 flex flex-row-reverse gap-2 justify-center">
-                        
-                        {{-- 1. Primary (Brown) --}}
                         <button type="button" 
                                 x-show="confirm.type === 'primary'"
                                 @click="confirm.open = false; if(confirm.action) confirm.action()"
                                 class="inline-flex w-full justify-center rounded-md bg-[#6B4E31] px-3 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 sm:w-auto uppercase tracking-wider"
                                 x-text="confirm.btnText">
                         </button>
-
-                        {{-- 2. Danger (Red) --}}
                         <button type="button" 
                                 x-show="confirm.type === 'danger'"
                                 @click="confirm.open = false; if(confirm.action) confirm.action()"
                                 class="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700 sm:w-auto uppercase tracking-wider"
                                 x-text="confirm.btnText">
                         </button>
-
-                        {{-- 3. Warning (Gold) --}}
                         <button type="button" 
                                 x-show="confirm.type === 'warning'"
                                 @click="confirm.open = false; if(confirm.action) confirm.action()"
                                 class="inline-flex w-full justify-center rounded-md bg-[#D4AF37] px-3 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 sm:w-auto uppercase tracking-wider"
                                 x-text="confirm.btnText">
                         </button>
-                        
                         <button type="button" 
                                 @click="confirm.open = false"
                                 class="inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-bold text-[#6B4E31] shadow-sm ring-1 ring-inset ring-[#eaddc5] hover:bg-[#F9F3E3] sm:w-auto uppercase tracking-wider">
@@ -452,6 +533,5 @@
                 </div>
             </div>
         </div>
-
     </div> 
 </x-app-layout>

@@ -21,7 +21,17 @@
         .animate-fade-up { animation: fadeUp 0.8s ease-out forwards; }
     </style>
 </head>
-<body class="h-screen overflow-hidden flex font-sans" style="background-color: #1A120B;">
+<body class="h-screen overflow-hidden flex font-sans relative" style="background-color: #1A120B;">
+
+    {{-- 🔊 STARTUP SCREEN: Unlocks Browser Audio Security --}}
+    <div id="audioUnlock" class="fixed inset-0 z-[9999] bg-[#1A120B] flex flex-col items-center justify-center text-[#F9F3E3] cursor-pointer transition-opacity duration-500" onclick="unlockAudio()">
+        <div class="bg-[#23170F] border-2 border-[#D4AF37] p-12 rounded-2xl shadow-2xl text-center max-w-2xl">
+            <svg class="w-24 h-24 mb-6 mx-auto text-[#D4AF37] animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M8 12H4m4 0v4H4v-4zm4 0h8m-8 0v4h8v-4z"></path></svg>
+            <h1 class="text-4xl font-serif font-bold tracking-widest uppercase mb-4 text-[#D4AF37]">Start Monitor</h1>
+            <p class="text-lg opacity-80 mb-2">Please click anywhere on this box to enable the sound system.</p>
+            <p class="text-sm opacity-50 italic">Browsers block automatic voice announcements until the screen is clicked.</p>
+        </div>
+    </div>
 
     {{-- 👈 LEFT SIDE: NOW SERVING (65% Width) --}}
     <div class="w-[65%] flex flex-col relative border-r-2 border-[#3E2F22] bg-[#23170F]">
@@ -46,7 +56,7 @@
                     {{ $serving->count() > 2 ? 'grid-rows-2' : '' }} place-items-center">
                     
                     @foreach($serving as $s)
-                        {{-- 🛡️ NEW MULTI-CALL TRIGGER: Uses class instead of ID --}}
+                        {{-- 🛡️ MULTI-CALL TRIGGER --}}
                         @if(isset($recentlyCalled) && $recentlyCalled->contains('id', $s->id))
                             <div class="hidden recent-call-data" 
                                  data-id="{{ $s->id }}" 
@@ -73,8 +83,8 @@
                                 {{ $s->customer_name }}
                             </span>
                             
-                            <span class="italic font-serif text-[#8C7B65] {{ $serving->count() > 1 ? 'text-lg' : 'text-2xl' }}">
-                                {{ $s->service->service_name }}
+                            <span class="italic font-serif text-[#8C7B65] text-center {{ $serving->count() > 1 ? 'text-lg' : 'text-2xl' }}">
+                                {{ $s->services->pluck('service_name')->join(', ') }}
                             </span>
                         </div>
                     @endforeach
@@ -121,43 +131,80 @@
     {{-- 🔊 ADVANCED MULTI-VOICE AUDIO SYSTEM --}}
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            const callData = document.querySelectorAll('.recent-call-data');
             
-            callData.forEach((el, index) => {
-                const id = el.getAttribute('data-id');
-                const msg = el.getAttribute('data-text');
-                const lastPlayed = localStorage.getItem('announced_' + id);
+            // 1. Check if user already clicked the screen today
+            if (sessionStorage.getItem('audioUnlocked') === 'true') {
+                document.getElementById('audioUnlock').style.display = 'none';
+                processAnnouncements();
+            }
 
-                // If this specific ticket hasn't been announced yet
-                if (!lastPlayed) {
-                    // Add a 4-second delay for each person so voices don't overlap
-                    setTimeout(() => {
-                        playAnnouncement(msg);
-                        localStorage.setItem('announced_' + id, Date.now());
-                    }, index * 4500); 
-                }
-            });
+            // 2. Unlock Audio Engine securely when clicked
+            window.unlockAudio = function() {
+                // Play a silent sound to force the browser to grant audio permissions
+                let dummyAudio = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
+                dummyAudio.volume = 0; // Silent
+                dummyAudio.play().catch(e => {});
+
+                let dummyVoice = new SpeechSynthesisUtterance('');
+                dummyVoice.volume = 0; // Silent
+                window.speechSynthesis.speak(dummyVoice);
+
+                // Hide the startup screen & remember for this session
+                sessionStorage.setItem('audioUnlocked', 'true');
+                document.getElementById('audioUnlock').style.opacity = '0';
+                setTimeout(() => document.getElementById('audioUnlock').style.display = 'none', 500);
+                
+                processAnnouncements();
+            };
+
+            // 3. The actual Voice engine
+            function processAnnouncements() {
+                const callData = document.querySelectorAll('.recent-call-data');
+                
+                callData.forEach((el, index) => {
+                    const id = el.getAttribute('data-id');
+                    const msg = el.getAttribute('data-text');
+                    const lastPlayed = localStorage.getItem('announced_' + id);
+
+                    // If this ticket hasn't been announced yet
+                    if (!lastPlayed) {
+                        setTimeout(() => {
+                            playAnnouncement(msg);
+                            localStorage.setItem('announced_' + id, Date.now());
+                        }, index * 4500); 
+                    }
+                });
+            }
 
             function playAnnouncement(text) {
                 let chime = new Audio('https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3');
                 chime.volume = 1.0;
                 
-                chime.play().then(() => {
-                    setTimeout(() => {
-                        if ('speechSynthesis' in window) {
-                            let utterance = new SpeechSynthesisUtterance(text);
-                            let voices = speechSynthesis.getVoices();
-                            let femaleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Female'));
-                            
-                            if (femaleVoice) utterance.voice = femaleVoice;
-                            utterance.rate = 0.85;
-                            window.speechSynthesis.speak(utterance);
-                        }
-                    }, 800);
-                }).catch(e => console.log("Click the screen once to enable audio."));
+                let playPromise = chime.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        setTimeout(() => {
+                            if ('speechSynthesis' in window) {
+                                let utterance = new SpeechSynthesisUtterance(text);
+                                let voices = speechSynthesis.getVoices();
+                                let femaleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Female'));
+                                
+                                if (femaleVoice) utterance.voice = femaleVoice;
+                                utterance.rate = 0.85;
+                                window.speechSynthesis.speak(utterance);
+                            }
+                        }, 800);
+                    }).catch(e => {
+                        console.error("Browser blocked the audio. Bringing the unlock screen back.");
+                        sessionStorage.removeItem('audioUnlocked');
+                        document.getElementById('audioUnlock').style.display = 'flex';
+                        document.getElementById('audioUnlock').style.opacity = '1';
+                    });
+                }
             }
 
-            // Cleanup old localStorage keys once in a while
+            // 4. Memory Cleanup
             if (Math.random() < 0.1) {
                 for (let i = 0; i < localStorage.length; i++){
                     let key = localStorage.key(i);
