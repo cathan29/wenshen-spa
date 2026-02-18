@@ -42,8 +42,9 @@
                     <div>
                         <p class="text-xs font-bold uppercase tracking-widest text-[#D4AF37] mb-2">Most Popular Treatment</p>
                         @if($topService)
-                            <h3 class="text-2xl font-serif font-bold text-[#6B4E31] mb-1">{{ $topService->service->service_name }}</h3>
-                            <p class="text-sm text-gray-500">Performed <span class="font-bold text-[#6B4E31]">{{ $topService->total }} times</span> total</p>
+                            {{-- 👇 Fixed to use the direct service_name and queues_count --}}
+                            <h3 class="text-2xl font-serif font-bold text-[#6B4E31] mb-1">{{ $topService->service_name }}</h3>
+                            <p class="text-sm text-gray-500">Performed <span class="font-bold text-[#6B4E31]">{{ $topService->queues_count }} times</span> total</p>
                         @else
                             <p class="text-gray-400 italic">No data yet</p>
                         @endif
@@ -98,12 +99,16 @@
                                     </td>
                                     <td class="p-4 font-bold text-stone-700">{{ $history->customer_name }}</td>
                                     <td class="p-4 text-sm text-gray-600">
-                                        <span class="bg-[#F9F3E3] text-[#6B4E31] px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
-                                            {{ $history->service->service_name }}
-                                        </span>
+                                        {{-- 👇 Loops through all treatments and creates multiple badges --}}
+                                        @foreach($history->services as $s)
+                                            <span class="inline-block bg-[#F9F3E3] text-[#6B4E31] px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider mr-1 mb-1">
+                                                {{ $s->service_name }}
+                                            </span>
+                                        @endforeach
                                     </td>
                                     <td class="p-4 text-right font-serif text-[#6B4E31] font-bold">
-                                        ₱{{ number_format($history->service->price, 0) }}
+                                        {{-- 👇 Now uses the correct calculated total price --}}
+                                        ₱{{ number_format($history->total_price, 0) }}
                                     </td>
                                 </tr>
                             @empty

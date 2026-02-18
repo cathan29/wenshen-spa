@@ -17,14 +17,14 @@ class AdminController extends Controller
         // 1. Calculate Today's Earnings (Using new Multiple Services logic)
         $todayEarnings = Queue::whereDate('updated_at', today())
             ->where('status', 'completed')
-            ->with('services') // 👈 Changed to plural
+            ->with('services') 
             ->get()
-            ->sum(fn($q) => $q->total_price); // 👈 Uses your new Model helper!
+            ->sum(fn($q) => $q->total_price); 
 
         // 2. Calculate Monthly Revenue
         $monthEarnings = Queue::whereMonth('updated_at', Carbon::now()->month)
             ->where('status', 'completed')
-            ->with('services') // 👈 Changed to plural
+            ->with('services') 
             ->get()
             ->sum(fn($q) => $q->total_price);
 
@@ -45,19 +45,17 @@ class AdminController extends Controller
 
         // 6. Recent History
         $recentTransactions = Queue::where('status', 'completed')
-            ->with('services') // 👈 Changed to plural
+            ->with('services') 
             ->latest('updated_at')
             ->take(5)
             ->get();
 
-        // Format for Dashboard view backwards compatibility
-        $formattedTopService = $topService ? (object)['total' => $topService->queues_count, 'service' => $topService] : null;
-
+        // 👇 FIX: Passed $topService directly without wrapping it in an stdClass!
         return view('admin.dashboard', [
             'todayEarnings' => $todayEarnings, 
             'monthEarnings' => $monthEarnings, 
             'todayCustomers' => $todayCustomers, 
-            'topService' => $formattedTopService, 
+            'topService' => $topService, 
             'topCustomer' => $topCustomer, 
             'recentTransactions' => $recentTransactions
         ]);
@@ -103,7 +101,7 @@ class AdminController extends Controller
         foreach ($chartData as $data) {
             $dateKey = $data->updated_at->format('M d');
             if ($revenueData->has($dateKey)) {
-                $revenueData[$dateKey] += $data->total_price; // 👈 Fixed for multiple services!
+                $revenueData[$dateKey] += $data->total_price; 
             }
         }
 
@@ -199,8 +197,8 @@ class AdminController extends Controller
                 $row = [
                     $data->updated_at->format('M d, Y h:i A'),
                     $data->customer_name,
-                    $data->services->pluck('service_name')->join(', '), // 👈 Lists all treatments!
-                    $data->total_price // 👈 Math is perfect
+                    $data->services->pluck('service_name')->join(', '), 
+                    $data->total_price 
                 ];
                 fputcsv($file, $row);
             }
